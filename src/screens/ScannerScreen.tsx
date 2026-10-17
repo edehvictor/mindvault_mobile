@@ -2,7 +2,7 @@
 import * as Clipboard from "expo-clipboard";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
@@ -10,16 +10,7 @@ import type { RootStackParamList } from "../navigation";
 import { spacing } from "../theme";
 import type { ThemeColors } from "../theme";
 import { useAppTheme } from "../theme/ThemeProvider";
-
-/**
- * Matches a MindVault resource URL anchored to its scheme and host.
- * Accepts:
- *   - https://example.com/resources/<id>
- *   - http://example.com/resources/<id>
- *   - mindvault://resources/<id>  (deep-link, host is optional)
- */
-const RESOURCE_URL_RE =
-  /^(?:https?:\/\/[^\/?#\s]+|mindvault:\/\/[^\/?#\s]*)\/resources\/([^\/?#\s]+)/i;
+import { parseResourceId } from "../utils/resourceLinks";
 
 interface ScannerScreenProps {
   navigation: NativeStackNavigationProp<RootStackParamList, "Scanner">;
@@ -221,9 +212,9 @@ export function ScannerScreen({ navigation }: ScannerScreenProps) {
     if (scanned) return;
     setScanned(true);
 
-    const match = data.match(RESOURCE_URL_RE);
-    if (match) {
-      navigation.replace("ResourceDetail", { resourceId: match[1] });
+    const resourceId = parseResourceId(data);
+    if (resourceId) {
+      navigation.replace("ResourceDetail", { resourceId });
       return;
     }
 
@@ -278,9 +269,9 @@ export function ScannerScreen({ navigation }: ScannerScreenProps) {
     }
 
     const match = trimmed.match(RESOURCE_URL_RE);
-    if (match) {
+    if (resourceId) {
       closePasteModal();
-      navigation.replace("ResourceDetail", { resourceId: match[1] });
+      navigation.replace("ResourceDetail", { resourceId });
       return;
     }
 
