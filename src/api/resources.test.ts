@@ -1,4 +1,14 @@
-import { buildQuery, fetchPublisherResources, getApiBaseUrl } from './resources';
+import {
+  buildQuery,
+  fetchPublisherResources,
+  getApiBaseUrl,
+  prepareEditPrice,
+  prepareOwnershipTransfer,
+  prepareRegister,
+  submitOwnershipTransfer,
+  submitPriceEdit,
+  submitRegister,
+} from './resources';
 import { getApiKey } from '../services/secureStorage';
 
 jest.mock('../services/secureStorage', () => ({
@@ -125,5 +135,140 @@ describe('fetchPublisherResources', () => {
     await expect(fetchPublisherResources('bad-key')).rejects.toThrow(
       'Unauthorized: Invalid API key'
     );
+  });
+});
+
+describe('publisher transaction endpoints', () => {
+  const originalFetch = global.fetch;
+  const API_KEY = 'pk_test_secret-value';
+
+  function mockFetch(body: unknown, status = 200) {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+      headers: { get: () => 'application/json' },
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+    return fetchMock;
+  }
+
+  function expectRequest(
+    fetchMock: jest.Mock,
+    path: string,
+    method: string,
+    body?: unknown
+  ) {
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${getApiBaseUrl()}${path}`);
+    expect(init.method).toBe(method);
+    expect(init.headers).toEqual({
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY,
+    });
+    if (body === undefined) {
+      expect(init.body).toBeUndefined();
+    } else {
+      expect(JSON.parse(init.body)).toEqual(body);
+    }
+  }
+
+  beforeEach(() => {
+    mockedGetApiKey.mockReset();
+    mockedGetApiKey.mockResolvedValue(API_KEY);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('prepareRegister uses GET and returns the unsigned XDR', async () => {
+    const fetchMock = mockFetch({ unsignedXdr: 'AAA', networkPassphrase: 'Test' });
+
+    await expect(prepareRegister('res 1')).resolves.toEqual({
+      unsignedXdr: 'AAA',
+      networkPassphrase: 'Test',
+    });
+    expectRequest(fetchMock, '/resources/res%201/register/prepare', 'GET');
+  });
+
+  it('submitRegister sends signedXdr and returns the tx hash', async () => {
+    const fetchMock = mockFetch({ txHash: 'abc' });
+
+    await expect(submitRegister('r1', 'SIGNED')).resolves.toEqual({ txHash: 'abc' });
+    expectRequest(fetchMock, '/resources/r1/register', 'POST', { signedXdr: 'SIGNED' });
+  });
+
+  it('prepareEditPrice sends the price', async () => {
+    const fetchMock = mockFetch({ unsignedXdr: 'AAA', networkPassphrase: 'Test' });
+
+    await expect(prepareEditPrice('r1', '2.50')).resolves.toMatchObject({ unsignedXdr: 'AAA' });
+    expectRequest(fetchMock, '/resources/r1/price/prepare', 'POST', { price: '2.50' });
+  });
+
+  it('submitPriceEdit sends signedXdr and price', async () => {
+    const fetchMock = mockFetch({ id: 'r1', price: '2.50', status: 'confirmed' });
+
+    await expect(submitPriceEdit('r1', 'SIGNED', '2.50')).resolves.toMatchObject({
+      status: 'confirmed',
+    });
+    expectRequest(fetchMock, '/resources/r1/price', 'POST', {
+      signedXdr: 'SIGNED',
+      price: '2.50',
+    });
+  });
+
+  it('prepareOwnershipTransfer sends newCreator', async () => {
+    const fetchMock = mockFetch({ unsignedXdr: 'AAA', networkPassphrase: 'Test' });
+
+    await expect(prepareOwnershipTransfer('r/1', 'GDEST')).resolves.toMatchObject({
+      unsignedXdr: 'AAA',
+    });
+    expectRequest(fetchMock, '/resources/r%2F1/ownership/prepare', 'POST', {
+      newCreator: 'GDEST',
+    });
+  });
+
+  it('submitOwnershipTransfer sends signedXdr and newCreator', async () => {
+    const fetchMock = mockFetch({ id: 'r1', newCreator: 'GDEST', status: 'confirmed' });
+
+    await expect(submitOwnershipTransfer('r1', 'SIGNED', 'GDEST')).resolves.toMatchObject({
+      newCreator: 'GDEST',
+    });
+    expectRequest(fetchMock, '/resources/r1/ownership', 'POST', {
+      signedXdr: 'SIGNED',
+      newCreator: 'GDEST',
+    });
+  });
+
+  it('throws without calling the API when no key is stored', async () => {
+    const fetchMock = mockFetch({});
+    mockedGetApiKey.mockResolvedValue(null);
+
+    await expect(prepareRegister('r1')).rejects.toThrow('No API key configured');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('maps 401 to a friendly message', async () => {
+    mockFetch({ error: 'Missing x-api-key header' }, 401);
+
+    await expect(submitRegister('r1', 'SIGNED')).rejects.toThrow('Unauthorized: Invalid API key');
+  });
+
+  it('surfaces the server message for 403 and other errors', async () => {
+    mockFetch({ error: 'Forbidden: you do not own this resource' }, 403);
+    await expect(prepareEditPrice('r1', '1')).rejects.toThrow(
+      'Forbidden: you do not own this resource'
+    );
+
+    mockFetch({ error: 'Resource must be verified before registering on-chain' }, 400);
+    await expect(prepareRegister('r1')).rejects.toThrow('Resource must be verified');
+  });
+
+  it('never includes the API key in error messages', async () => {
+    mockFetch({ error: `bad key ${API_KEY}`, apiKey: API_KEY }, 500);
+
+    await expect(submitPriceEdit('r1', 'SIGNED', '1')).rejects.not.toThrow(API_KEY);
   });
 });

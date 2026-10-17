@@ -55,13 +55,13 @@ export function useEditPrice() {
       setStatus("preparing");
 
       try {
-        const { xdr, networkPassphrase } = await prepareEditPrice(resourceId, price);
+        const { unsignedXdr, networkPassphrase } = await prepareEditPrice(resourceId, price);
         setStatus("signing");
 
-        const signedXdr = signTransactionXdr(xdr, secretKey, networkPassphrase);
+        const signedXdr = signTransactionXdr(unsignedXdr, secretKey, networkPassphrase);
         setStatus("submitting");
 
-        await submitPriceEdit(resourceId, signedXdr);
+        await submitPriceEdit(resourceId, signedXdr, price.trim());
         setStatus("idle");
         return true;
       } catch (err) {

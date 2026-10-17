@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -127,7 +126,7 @@ export function RegisterModal({
       // Step 1: Prepare registration
       setStep("preparing");
       setErrorMessage("");
-      const { xdr: unsignedXdr, networkPassphrase } = await prepareRegister(resource.id);
+      const { unsignedXdr, networkPassphrase } = await prepareRegister(resource.id);
       setXdr(unsignedXdr);
 
       // Step 2: Sign XDR

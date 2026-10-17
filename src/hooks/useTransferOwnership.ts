@@ -33,9 +33,9 @@ function normalizeStellarAddress(address: string): string {
 
 /**
  * Mobile transfer-ownership flow:
- * 1. prepare  — POST /resources/:id/ownership/prepare  → get XDR
+ * 1. prepare  — POST /resources/:id/ownership/prepare { newCreator } → unsigned XDR
  * 2. sign     — sign the XDR (stub — replace with mobile wallet)
- * 3. submit   — POST /resources/:id/ownership          → broadcast
+ * 3. submit   — POST /resources/:id/ownership { signedXdr, newCreator } → broadcast
  */
 export function useTransferOwnership(): UseTransferOwnershipResult {
   const [step, setStep] = useState<TransferStep>("idle");
@@ -58,11 +58,11 @@ export function useTransferOwnership(): UseTransferOwnershipResult {
     try {
       // Step 1: Prepare
       setStep("preparing");
-      const { xdr } = await prepareOwnershipTransfer(resourceId);
+      const { unsignedXdr } = await prepareOwnershipTransfer(resourceId, destination);
 
       // Step 2: Sign
       setStep("signing");
-      const signedXdr = await signXdr(xdr);
+      const signedXdr = await signXdr(unsignedXdr);
 
       // Step 3: Submit
       setStep("submitting");

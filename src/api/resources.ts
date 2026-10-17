@@ -1,4 +1,4 @@
-import { loadApiBaseUrl, saveApiBaseUrl } from "./apiSettings";
+import { getDefaultApiBaseUrl, loadApiBaseUrl, saveApiBaseUrl } from "./apiSettings";
 import Constants from "expo-constants";
 import { Keypair, Transaction } from "@stellar/stellar-sdk";
 
@@ -7,9 +7,7 @@ import type { CatalogFilters, RegistryStatus, Resource } from "../types";
 import { extractApiErrorMessage } from "../utils/errorLogger";
 import { validateStellarSecret } from "../utils/validateStellarSecret";
 
-const DEFAULT_API_BASE_URL =
-  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ?? "http://localhost:4021";
-let apiBaseUrl = DEFAULT_API_BASE_URL;
+let apiBaseUrl = getDefaultApiBaseUrl();
 
 export const DEFAULT_STELLAR_NETWORK =
   (Constants.expoConfig?.extra?.network as string | undefined)?.trim().toLowerCase() || "testnet";
@@ -18,7 +16,7 @@ export const DEFAULT_NETWORK_PASSPHRASE =
   (Constants.expoConfig?.extra?.networkPassphrase as string | undefined) ??
   "Test SDF Network ; September 2015";
 
-const API_KEY_STORAGE_KEY = "mindvault_api_key";
+export { getDefaultApiBaseUrl };
 
 export function buildQuery(filters?: CatalogFilters): string {
   if (!filters) return "";
@@ -51,10 +49,6 @@ export async function setApiBaseUrl(value: string): Promise<string> {
 
 export function getApiBaseUrl(): string {
   return apiBaseUrl;
-}
-
-export function getDefaultApiBaseUrl(): string {
-  return DEFAULT_API_BASE_URL;
 }
 
 export async function fetchCatalog(filters?: CatalogFilters): Promise<Resource[]> {
@@ -115,37 +109,81 @@ export async function fetchRegistryStatus(): Promise<RegistryStatus> {
   return res.json();
 }
 
-export async function prepareEditPrice(
-  resourceId: string,
-  price: string
-): Promise<{ xdr: string; networkPassphrase?: string }> {
-  const response = await fetch(`${apiBaseUrl}/resources/${encodeURIComponent(resourceId)}/price/prepare`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ price }),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      await extractApiErrorMessage(response, "Failed to prepare price edit transaction.")
-    );
+/**
+ * Sends an authenticated request to a publisher-only endpoint.
+ *
+ * Reads the publisher API key from secure storage, sends it as `x-api-key`,
+ * and turns a non-OK response into an `Error` with a user-safe message. The
+ * key itself never appears in the thrown message.
+ */
+async function publisherFetch<T>(
+  path: string,
+  init: { method: "GET" | "POST"; body?: unknown },
+  fallbackMessage: string
+): Promise<T> {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
+    throw new Error("No API key configured");
   }
 
-  return response.json();
+  const res = await fetch(`${apiBaseUrl}${path}`, {
+    method: init.method,
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+    },
+    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+  });
+
+  if (res.status === 401) {
+    throw new Error("Unauthorized: Invalid API key");
+  }
+  if (!res.ok) {
+    const message = await extractApiErrorMessage(
+      res,
+      res.status === 403 ? "Forbidden: Access denied" : fallbackMessage
+    );
+    // Never let a server that echoes the key leak it into the UI.
+    throw new Error(message.split(apiKey).join("[redacted]"));
+  }
+
+  return res.json();
 }
 
-export async function submitPriceEdit(resourceId: string, signedXdr: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/resources/${encodeURIComponent(resourceId)}/price`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ xdr: signedXdr }),
-  });
+function resourcePath(resourceId: string, suffix: string): string {
+  return `/resources/${encodeURIComponent(resourceId)}/${suffix}`;
+}
 
-  if (!response.ok) {
-    throw new Error(
-      await extractApiErrorMessage(response, "Failed to submit signed price edit transaction.")
-    );
-  }
+/** Unsigned transaction returned by every publisher `prepare` endpoint. */
+export interface PreparedTransaction {
+  unsignedXdr: string;
+  networkPassphrase?: string;
+}
+
+export function prepareEditPrice(resourceId: string, price: string): Promise<PreparedTransaction> {
+  return publisherFetch(
+    resourcePath(resourceId, "price/prepare"),
+    { method: "POST", body: { price } },
+    "Failed to prepare price edit transaction."
+  );
+}
+
+export interface SubmitPriceEditResponse {
+  id: string;
+  price: string;
+  status: string;
+}
+
+export function submitPriceEdit(
+  resourceId: string,
+  signedXdr: string,
+  price: string
+): Promise<SubmitPriceEditResponse> {
+  return publisherFetch(
+    resourcePath(resourceId, "price"),
+    { method: "POST", body: { signedXdr, price } },
+    "Failed to submit signed price edit transaction."
+  );
 }
 
 export function signTransactionXdr(
@@ -164,80 +202,61 @@ export function signTransactionXdr(
   return transaction.toEnvelope().toXDR("base64");
 }
 
-export interface PrepareRegisterResponse {
-  xdr: string;
-  networkPassphrase?: string;
-}
+export type PrepareRegisterResponse = PreparedTransaction;
 
 export interface SubmitRegisterResponse {
   txHash: string;
 }
 
-export async function prepareRegister(resourceId: string): Promise<PrepareRegisterResponse> {
-  const res = await fetch(`${apiBaseUrl}/resources/${encodeURIComponent(resourceId)}/register/prepare`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to prepare registration");
-  }
-  return res.json();
+export function prepareRegister(resourceId: string): Promise<PrepareRegisterResponse> {
+  return publisherFetch(
+    resourcePath(resourceId, "register/prepare"),
+    { method: "GET" },
+    "Failed to prepare registration"
+  );
 }
 
-export async function submitRegister(
+export function submitRegister(
   resourceId: string,
   signedXdr: string
 ): Promise<SubmitRegisterResponse> {
-  const res = await fetch(`${apiBaseUrl}/resources/${encodeURIComponent(resourceId)}/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ xdr: signedXdr }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to submit registration");
-  }
-  return res.json();
+  return publisherFetch(
+    resourcePath(resourceId, "register"),
+    { method: "POST", body: { signedXdr } },
+    "Failed to submit registration"
+  );
 }
 
-export interface PrepareOwnershipResponse {
-  xdr: string;
-  resourceId: string;
-}
+export type PrepareOwnershipResponse = PreparedTransaction;
 
 export interface TransferOwnershipResponse {
-  success: boolean;
+  id: string;
+  newCreator: string;
+  status: string;
   txHash?: string;
 }
 
-export async function prepareOwnershipTransfer(
-  resourceId: string
+export function prepareOwnershipTransfer(
+  resourceId: string,
+  newCreator: string
 ): Promise<PrepareOwnershipResponse> {
-  const res = await fetch(`${apiBaseUrl}/resources/${resourceId}/ownership/prepare`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) {
-    throw new Error(await extractApiErrorMessage(res, "Failed to prepare ownership transfer"));
-  }
-  return res.json();
+  return publisherFetch(
+    resourcePath(resourceId, "ownership/prepare"),
+    { method: "POST", body: { newCreator } },
+    "Failed to prepare ownership transfer"
+  );
 }
 
-export async function submitOwnershipTransfer(
+export function submitOwnershipTransfer(
   resourceId: string,
   signedXdr: string,
-  destinationAddress: string
+  newCreator: string
 ): Promise<TransferOwnershipResponse> {
-  const res = await fetch(`${apiBaseUrl}/resources/${resourceId}/ownership`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ signedXdr, destinationAddress }),
-  });
-  if (!res.ok) {
-    throw new Error(await extractApiErrorMessage(res, "Failed to submit ownership transfer"));
-  }
-  return res.json();
+  return publisherFetch(
+    resourcePath(resourceId, "ownership"),
+    { method: "POST", body: { signedXdr, newCreator } },
+    "Failed to submit ownership transfer"
+  );
 }
 
 /**
