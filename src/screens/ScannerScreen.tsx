@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as Clipboard from "expo-clipboard";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -268,7 +267,7 @@ export function ScannerScreen({ navigation }: ScannerScreenProps) {
       return;
     }
 
-    const match = trimmed.match(RESOURCE_URL_RE);
+    const resourceId = parseResourceId(trimmed);
     if (resourceId) {
       closePasteModal();
       navigation.replace("ResourceDetail", { resourceId });
