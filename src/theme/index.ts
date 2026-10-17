@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import { DarkTheme, DefaultTheme, type Theme } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColorScheme } from "react-native";
 import { useState, useEffect } from "react";
@@ -126,6 +127,23 @@ export const shared = StyleSheet.create({
   primaryButton: { backgroundColor: colors.primary },
   primaryButtonText: { color: "#ffffff" },
 });
+
+/** React Navigation theme (headers, cards, backgrounds) built from the app colors. */
+export function getNavigationTheme(colors: ThemeColors, colorScheme: ColorScheme): Theme {
+  const base = colorScheme === "dark" ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.surface,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.danger,
+    },
+  };
+}
 
 // Theme hook for components
 export function useTheme() {

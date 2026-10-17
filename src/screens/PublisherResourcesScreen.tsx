@@ -35,7 +35,7 @@ type PublisherResourcesNavigation = NativeStackNavigationProp<
 >;
 
 export function PublisherResourcesScreen() {
-  const { colors, shared, typography } = useAppTheme();
+  const { colors, colorScheme, shared, typography } = useAppTheme();
   const navigation = useNavigation<PublisherResourcesNavigation>();
 
   const goToPublicCatalog = useCallback(() => {
@@ -422,7 +422,7 @@ export function PublisherResourcesScreen() {
 
   const renderStoredKeyLoading = () => (
     <SafeAreaView style={shared.screen} edges={["top", "left", "right"]}>
-      <StatusBar style="dark" />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
       <View style={[styles.container, styles.emptyState]}>
         <ActivityIndicator color={colors.primary} size="large" />
         <Text style={styles.emptyBody}>Checking saved API key…</Text>
@@ -432,7 +432,7 @@ export function PublisherResourcesScreen() {
 
   const renderAuthForm = () => (
     <SafeAreaView style={shared.screen} edges={["top", "left", "right"]}>
-      <StatusBar style="dark" />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
       <View style={styles.container}>
         <View style={styles.authSection}>
           <Text style={typography.title}>Publisher Resources</Text>
@@ -517,7 +517,7 @@ export function PublisherResourcesScreen() {
 
   const renderResourcesList = () => (
     <SafeAreaView style={shared.screen} edges={["top", "left", "right"]}>
-      <StatusBar style="dark" />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
       <FlatList
         data={loading ? null : filteredResources}
         keyExtractor={(item) => item.id}

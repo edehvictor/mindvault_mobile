@@ -82,6 +82,8 @@ export function SettingsScreen() {
   };
 
   const isDirty = apiUrl.trim() !== savedUrl;
+  const isDefault =
+    apiUrl.trim() === getDefaultApiBaseUrl() && savedUrl === getDefaultApiBaseUrl();
 
   return (
     <SafeAreaView style={shared.screen}>
@@ -126,8 +128,8 @@ export function SettingsScreen() {
               { color: colors.textMuted, marginBottom: 12 },
             ]}
           >
-            The base URL used for all API requests. Restart the app after
-            changing.
+            The base URL used for all API requests. Changes apply
+            immediately and are kept across app restarts.
           </Text>
           <TextInput
             style={[
@@ -152,10 +154,12 @@ export function SettingsScreen() {
               style={[
                 shared.button,
                 { flex: 1, backgroundColor: colors.neutralBg },
-                !isDirty && styles.disabledButton,
+                isDefault && styles.disabledButton,
               ]}
               onPress={handleReset}
-              disabled={isSaving}
+              disabled={isSaving || isDefault}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isSaving || isDefault }}
             >
               <Text style={[shared.buttonText, { color: colors.textMuted }]}>
                 Reset to Default
