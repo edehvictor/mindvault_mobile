@@ -1,3 +1,5 @@
+import { parseResourceId } from "../resourceLinks";
+
 describe("parseResourceId", () => {
   it.each<[string, string]>([
     ["mindvault://resources/abc", "abc"],

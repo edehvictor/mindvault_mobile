@@ -41,7 +41,7 @@ describe("ScannerScreen paste flow", () => {
     fireEvent.press(screen.getByText("Paste Link Instead"));
 
     expect(screen.getByText("Enter Resource Link")).toBeTruthy();
-    expect(screen.getByPlaceholderText("https://mindvault.app/resources/ &")).toBeTruthy();
+    expect(screen.getByPlaceholderText("https://mindvault.app/resources/…")).toBeTruthy();
   });
 
   it("navigates for a valid resource link", () => {
@@ -49,7 +49,7 @@ describe("ScannerScreen paste flow", () => {
 
     fireEvent.press(screen.getByText("Paste Link Instead"));
     fireEvent.changeText(
-      screen.getByPlaceholderText("https://mindvault.app/resources/ &"),
+      screen.getByPlaceholderText("https://mindvault.app/resources/…"),
       "mindvault://resources/abc",
     );
     fireEvent.press(screen.getByText("Go"));
@@ -62,7 +62,7 @@ describe("ScannerScreen paste flow", () => {
 
     fireEvent.press(screen.getByText("Paste Link Instead"));
     fireEvent.changeText(
-      screen.getByPlaceholderText("https://mindvault.app/resources/ &"),
+      screen.getByPlaceholderText("https://mindvault.app/resources/…"),
       "not-a-resource-link",
     );
     fireEvent.press(screen.getByText("Go"));
