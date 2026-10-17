@@ -80,12 +80,35 @@ npm run validate-deps
 
 This runs `expo-doctor`, which checks that your installed Expo and native module versions are compatible with the project's Expo SDK and validates `app.json`/config. It requires no native build credentials (no Xcode signing, no Android keystore, no EAS token), so it runs anywhere `npm` does, including CI. Run it after changing dependencies and before opening a PR.
 
-Both `npm run validate-deps` and `npm run typecheck` run automatically on every pull request via the `Typecheck & Dependency Validation` workflow (`.github/workflows/typecheck.yml`).
+## Linting
+
+```bash
+npm run lint
+```
+
+Runs ESLint with Expo's recommended config (`.eslintrc.js`), including the React hooks rules. Errors fail the build, and the number of allowed warnings is capped (`--max-warnings`), so fix any new warnings you introduce. The cap only ever goes down.
+
+## Tests
+
+```bash
+npm test
+```
+
+Runs the Jest suite (`jest-expo` preset). Add or update tests alongside your change.
+
+## Continuous Integration
+
+Every pull request (and every push to `main`) runs the `CI` workflow (`.github/workflows/ci.yml`):
+
+- **`typecheck`**: `npm ci`, `npm run validate-deps`, `npm run typecheck`
+- **`ci`**: `npm ci`, `npm run lint`, `npm test -- --ci`
+
+Both jobs are required checks on `main`: a PR can only merge when both are green and the branch is up to date with `main`.
 
 ## Submitting a PR
 
 1. Fork the repo and create a branch off `main` with a descriptive name (e.g. `feat/search-filters` or `fix/refresh-crash`).
 2. Make your changes, keeping commits focused and atomic.
-3. Run `npm run typecheck` and confirm it passes with no errors.
+3. Run `npm run typecheck && npm run lint && npm test` and confirm everything passes. Paste the output in your PR description.
 4. Open a pull request against `main` with a clear description of what changed and why.
 5. Link any relevant issues in the PR description.

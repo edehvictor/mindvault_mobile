@@ -8,13 +8,35 @@ on:
     # no open PR — direct pushes/merges to main.
     branches: ["main"]
   pull_request:
-    branches: ["*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Job names `typecheck` and `ci` are required status checks on main.
+# Renaming a job means updating branch protection in the same change.
 jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Validates Expo dependency versions and project config.
+      # Runs on hosted Linux runners and needs no native build credentials
+      # (no Xcode signing, no Android keystore, no EAS token).
+      - name: Validate Expo dependencies
+        run: npm run validate-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
   ci:
     runs-on: ubuntu-latest
     steps:
@@ -27,8 +49,8 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run typecheck
-
       - name: Lint
         run: npm run lint
-        continue-on-error: true
+
+      - name: Test
+        run: npm test -- --ci
